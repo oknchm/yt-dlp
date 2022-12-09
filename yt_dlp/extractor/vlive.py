@@ -1,5 +1,6 @@
 import itertools
 import json
+import re
 
 from .naver import NaverBaseIE
 from ..compat import (
@@ -185,8 +186,7 @@ class VLiveIE(VLiveBaseIE):
                 'comment_count': int_or_none(video.get('commentCount')),
                 'timestamp': int_or_none(video.get('createdAt'), scale=1000),
                 'release_timestamp': int_or_none(traverse_obj(video, 'onAirStartAt', 'willStartAt'), scale=1000),
-                'live_status': video.get('badges'),
-                #'live_status': (', '.join([re.sub('_', ' ', x) for x in video.get('badges')])),
+                'live_status': (', '.join([re.sub('_', ' ', x) for x in video.get('badges','')])),
                 'thumbnail': video.get('thumb'),
             }
 
