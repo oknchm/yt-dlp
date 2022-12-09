@@ -151,7 +151,7 @@ class VLiveIE(VLiveBaseIE):
 
         post = self._call_api(
             'post/v1.0/officialVideoPost-%s', video_id,
-            'author{nickname},channel{channelCode,channelName},officialVideo{commentCount,exposeStatus,likeCount,playCount,playTime,status,title,type,vodId},playlist{playlistSeq,totalCount,name}')
+            'author{nickname},channel{channelCode,channelName},officialVideo{commentCount,exposeStatus,likeCount,playCount,playTime,status,title,type,vodId,badges},playlist{playlistSeq,totalCount,name}')
 
         playlist_id = str_or_none(try_get(post, lambda x: x['playlist']['playlistSeq']))
         if not self._yes_playlist(playlist_id, video_id):
