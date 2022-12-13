@@ -1,6 +1,5 @@
 import itertools
 import json
-import re
 
 from .naver import NaverBaseIE
 from ..compat import (
