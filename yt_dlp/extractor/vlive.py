@@ -188,7 +188,6 @@ class VLiveIE(VLiveBaseIE):
                 'release_timestamp': int_or_none(traverse_obj(video, 'onAirStartAt', 'willStartAt'), scale=1000),
                 'live_status': (', '.join([re.sub('_', ' ', x) for x in video.get('badges', '')])),
                 'translations': (traverse_obj(video, ('multinationalTitles', ..., {'locale': 'locale', 'label': 'label',}))),
-                #'translations': ([{key: value for key, value in dictionary.items() if key in {'locale', 'label'}} for dictionary in video.get('multinationalTitles')]),
                 'thumbnail': video.get('thumb'),
             }
 
