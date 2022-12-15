@@ -186,7 +186,7 @@ class VLiveIE(VLiveBaseIE):
                 'timestamp': int_or_none(video.get('createdAt'), scale=1000),
                 'release_timestamp': int_or_none(traverse_obj(video, 'onAirStartAt', 'willStartAt'), scale=1000),
                 'live_type': video.get('badges') if video.get('badges') is None else [x.replace('_', ' ') for x in video.get('badges')],
-                'translations': str_or_none(traverse_obj(video, ('multinationalTitles', ..., {'locale': 'locale', 'label': 'label',}))),
+                'translations': traverse_obj(video,('multinationalTitles', ..., {'locale': 'locale', 'label': 'label',})) or None,
                 'thumbnail': video.get('thumb'),
             }
 
