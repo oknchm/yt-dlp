@@ -3360,7 +3360,13 @@ def js_to_json(code, vars={}, *, strict=False):
                 return f'"{i}":' if v.endswith(':') else str(i)
 
         if v in vars:
-            return json.dumps(vars[v])
+            try:
+                if not strict:
+                    json.loads(vars[v])
+            except json.decoder.JSONDecodeError:
+                return json.dumps(vars[v])
+            else:
+                return vars[v]
 
         if not strict:
             return f'"{v}"'
@@ -3395,7 +3401,7 @@ def qualities(quality_ids):
     return q
 
 
-POSTPROCESS_WHEN = ('pre_process', 'after_filter', 'before_dl', 'post_process', 'after_move', 'after_video', 'playlist')
+POSTPROCESS_WHEN = ('pre_process', 'after_filter', 'video', 'before_dl', 'post_process', 'after_move', 'after_video', 'playlist')
 
 
 DEFAULT_OUTTMPL = {
@@ -3480,67 +3486,93 @@ def error_to_str(err):
     return f'{type(err).__name__}: {err}'
 
 
-def mimetype2ext(mt):
-    if mt is None:
+def mimetype2ext(mt, default=NO_DEFAULT):
+    if not isinstance(mt, str):
+        if default is not NO_DEFAULT:
+            return default
         return None
 
-    mt, _, params = mt.partition(';')
-    mt = mt.strip()
-
-    FULL_MAP = {
-        'audio/mp4': 'm4a',
-        # Per RFC 3003, audio/mpeg can be .mp1, .mp2 or .mp3. Here use .mp3 as
-        # it's the most popular one
-        'audio/mpeg': 'mp3',
-        'audio/x-wav': 'wav',
-        'audio/wav': 'wav',
-        'audio/wave': 'wav',
-    }
-
-    ext = FULL_MAP.get(mt)
-    if ext is not None:
-        return ext
-
-    SUBTYPE_MAP = {
+    MAP = {
+        # video
         '3gpp': '3gp',
-        'smptett+xml': 'tt',
-        'ttaf+xml': 'dfxp',
-        'ttml+xml': 'ttml',
-        'x-flv': 'flv',
-        'x-mp4-fragmented': 'mp4',
-        'x-ms-sami': 'sami',
-        'x-ms-wmv': 'wmv',
+        'mp2t': 'ts',
+        'mp4': 'mp4',
+        'mpeg': 'mpeg',
         'mpegurl': 'm3u8',
-        'x-mpegurl': 'm3u8',
-        'vnd.apple.mpegurl': 'm3u8',
+        'quicktime': 'mov',
+        'webm': 'webm',
+        'vp9': 'vp9',
+        'x-flv': 'flv',
+        'x-m4v': 'm4v',
+        'x-matroska': 'mkv',
+        'x-mng': 'mng',
+        'x-mp4-fragmented': 'mp4',
+        'x-ms-asf': 'asf',
+        'x-ms-wmv': 'wmv',
+        'x-msvideo': 'avi',
+
+        # application (streaming playlists)
         'dash+xml': 'mpd',
         'f4m+xml': 'f4m',
         'hds+xml': 'f4m',
+        'vnd.apple.mpegurl': 'm3u8',
         'vnd.ms-sstr+xml': 'ism',
-        'quicktime': 'mov',
-        'mp2t': 'ts',
+        'x-mpegurl': 'm3u8',
+
+        # audio
+        'audio/mp4': 'm4a',
+        # Per RFC 3003, audio/mpeg can be .mp1, .mp2 or .mp3.
+        # Using .mp3 as it's the most popular one
+        'audio/mpeg': 'mp3',
+        'audio/webm': 'weba',
+        'audio/x-matroska': 'mka',
+        'audio/x-mpegurl': 'm3u',
+        'midi': 'mid',
+        'ogg': 'ogg',
+        'wav': 'wav',
+        'wave': 'wav',
+        'x-aac': 'aac',
+        'x-flac': 'flac',
+        'x-m4a': 'm4a',
+        'x-realaudio': 'ra',
         'x-wav': 'wav',
-        'filmstrip+json': 'fs',
+
+        # image
+        'avif': 'avif',
+        'bmp': 'bmp',
+        'gif': 'gif',
+        'jpeg': 'jpg',
+        'png': 'png',
         'svg+xml': 'svg',
-    }
+        'tiff': 'tif',
+        'vnd.wap.wbmp': 'wbmp',
+        'webp': 'webp',
+        'x-icon': 'ico',
+        'x-jng': 'jng',
+        'x-ms-bmp': 'bmp',
 
-    _, _, subtype = mt.rpartition('/')
-    ext = SUBTYPE_MAP.get(subtype.lower())
-    if ext is not None:
-        return ext
+        # caption
+        'filmstrip+json': 'fs',
+        'smptett+xml': 'tt',
+        'ttaf+xml': 'dfxp',
+        'ttml+xml': 'ttml',
+        'x-ms-sami': 'sami',
 
-    SUFFIX_MAP = {
+        # misc
+        'gzip': 'gz',
         'json': 'json',
         'xml': 'xml',
         'zip': 'zip',
-        'gzip': 'gz',
     }
 
-    _, _, suffix = subtype.partition('+')
-    ext = SUFFIX_MAP.get(suffix)
-    if ext is not None:
-        return ext
+    mimetype = mt.partition(';')[0].strip().lower()
+    _, _, subtype = mimetype.rpartition('/')
 
+    ext = traverse_obj(MAP, mimetype, subtype, subtype.rsplit('+')[-1])
+    if ext:
+        return ext
+    elif default is not NO_DEFAULT:
+        return default
     return subtype.replace('+', '.')
 
 
@@ -3624,7 +3656,7 @@ def get_compatible_ext(*, vcodecs, acodecs, vexts, aexts, preferences=None):
 
     COMPATIBLE_EXTS = (
         {'mp3', 'mp4', 'm4a', 'm4p', 'm4b', 'm4r', 'm4v', 'ismv', 'isma', 'mov'},
-        {'webm'},
+        {'webm', 'weba'},
     )
     for ext in preferences or vexts:
         current_exts = {ext, *vexts, *aexts}
@@ -3634,7 +3666,7 @@ def get_compatible_ext(*, vcodecs, acodecs, vexts, aexts, preferences=None):
     return 'mkv' if allow_mkv else preferences[-1]
 
 
-def urlhandle_detect_ext(url_handle):
+def urlhandle_detect_ext(url_handle, default=NO_DEFAULT):
     getheader = url_handle.headers.get
 
     cd = getheader('Content-Disposition')
@@ -3645,7 +3677,13 @@ def urlhandle_detect_ext(url_handle):
             if e:
                 return e
 
-    return mimetype2ext(getheader('Content-Type'))
+    meta_ext = getheader('x-amz-meta-name')
+    if meta_ext:
+        e = meta_ext.rpartition('.')[2]
+        if e:
+            return e
+
+    return mimetype2ext(getheader('Content-Type'), default=default)
 
 
 def encode_data_uri(data, mime_type):
@@ -5924,7 +5962,7 @@ MEDIA_EXTENSIONS = Namespace(
     common_video=('avi', 'flv', 'mkv', 'mov', 'mp4', 'webm'),
     video=('3g2', '3gp', 'f4v', 'mk3d', 'divx', 'mpg', 'ogv', 'm4v', 'wmv'),
     common_audio=('aiff', 'alac', 'flac', 'm4a', 'mka', 'mp3', 'ogg', 'opus', 'wav'),
-    audio=('aac', 'ape', 'asf', 'f4a', 'f4b', 'm4b', 'm4p', 'm4r', 'oga', 'ogx', 'spx', 'vorbis', 'wma'),
+    audio=('aac', 'ape', 'asf', 'f4a', 'f4b', 'm4b', 'm4p', 'm4r', 'oga', 'ogx', 'spx', 'vorbis', 'wma', 'weba'),
     thumbnails=('jpg', 'png', 'webp'),
     storyboards=('mhtml', ),
     subtitles=('srt', 'vtt', 'ass', 'lrc'),
@@ -6056,9 +6094,9 @@ class FormatSorter:
         'vext': {'type': 'ordered', 'field': 'video_ext',
                  'order': ('mp4', 'mov', 'webm', 'flv', '', 'none'),
                  'order_free': ('webm', 'mp4', 'mov', 'flv', '', 'none')},
-        'aext': {'type': 'ordered', 'field': 'audio_ext',
-                 'order': ('m4a', 'aac', 'mp3', 'ogg', 'opus', 'webm', '', 'none'),
-                 'order_free': ('ogg', 'opus', 'webm', 'mp3', 'm4a', 'aac', '', 'none')},
+        'aext': {'type': 'ordered', 'regex': True, 'field': 'audio_ext',
+                 'order': ('m4a', 'aac', 'mp3', 'ogg', 'opus', 'web[am]', '', 'none'),
+                 'order_free': ('ogg', 'opus', 'web[am]', 'mp3', 'm4a', 'aac', '', 'none')},
         'hidden': {'visible': False, 'forced': True, 'type': 'extractor', 'max': -1000},
         'aud_or_vid': {'visible': False, 'forced': True, 'type': 'multiple',
                        'field': ('vcodec', 'acodec'),
